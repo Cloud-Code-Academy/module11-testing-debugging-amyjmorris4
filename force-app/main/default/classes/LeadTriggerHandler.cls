@@ -32,21 +32,23 @@ public with sharing class LeadTriggerHandler {
 	 */
 	public static void handleTitleNormalization(List<Lead> leadsToNormalize) {
 		for (Lead ld : leadsToNormalize) {
-			if (ld.title == 'vp' || ld.title.contains('v.p.') || ld.title.contains('vice president')) {
+			if (ld.Title != null) {
+			if (ld.Title.containsIgnoreCase('vp') || ld.Title.containsIgnoreCase('v.p.') || ld.Title.containsIgnoreCase('vice president')) {
 				ld.Title = 'Vice President';
 			} else if (
-				ld.title.contains('mgr') ||
-				ld.title.contains('manage') ||
-				ld.title.contains('head of department')
+				ld.Title.containsIgnoreCase('mgr') ||
+				ld.Title.containsIgnoreCase('manage') ||
+				ld.Title.containsIgnoreCase('head of department')
 			) {
 				ld.Title = 'Manager';
-			} else if (ld.title.contains('exec') || ld.title == 'chief' || ld.title.contains('head')) {
+			} else if (ld.title.containsIgnoreCase('exec') || ld.title.containsIgnoreCase('chief') || ld.title.containsIgnoreCase('head')) {
 				ld.Title = 'Executive';
-			} else if (ld.title.contains('assist') || ld.title.contains('deputy') || ld.title == 'jr') {
+			} else if (ld.title.containsIgnoreCase('assist') || ld.Title.containsIgnoreCase('deputy') || ld.Title.containsIgnoreCase('jr')) {
 				ld.Title = 'Assistant';
 			}
 		}
 	}
+}
 
 	/* 
 	 * Question 2
@@ -61,19 +63,19 @@ public with sharing class LeadTriggerHandler {
 	 */
 	public static void handleAutoLeadScoring(List<Lead> leadsToScore) {
 		for (Lead ld : leadsToScore) {
-			Integer score = 10;
+			Integer score = 0; //start at 0 and increment based on conditions
 
 			// Check and add points based on the specified conditions
 			if (ld.LeadSource == 'Website' && ld.Email != null) {
-				score = 3;
+				score += 3;
 			}
 
 			if (ld.Phone != null) {
-				score = 5;
+				score += 5;
 			}
 
 			if (ld.Industry == 'Technology') {
-				score = 10;
+				score += 10;
 			}
 
 			ld.Lead_Score__c = score; // Set the computed score back to the lead
@@ -107,12 +109,20 @@ public with sharing class LeadTriggerHandler {
 		// Step 1: Gather all lead emails
         Map<Id,String> leadToEmailMap = new Map<Id,String>();
 		for (Lead lead : leads) {
+			if (lead.IsConverted || String.isBlank(lead.Email)) { //skips leads that are already converted or have null email
+				continue;
+			}
 			leadToEmailMap.put(lead.Id, lead.Email);
+		}
+
+		if (leadToEmailMap.isEmpty()) {
+			return;
 		}
 
 		// Step 2: Find matching contacts based on email
 		Map<String, Contact> emailToContactMap = new Map<String, Contact>();
 		for (Contact c : [SELECT Id, Email, AccountId FROM Contact WHERE Email IN :leadToEmailMap.values()]) {
+			//only allow one contact per email
 			if (!emailToContactMap.containsKey(c.Email)) {
 				emailToContactMap.put(c.Email, c);
 			} else {
@@ -128,15 +138,18 @@ public with sharing class LeadTriggerHandler {
 		for (Id leadId : leadToEmailMap.keySet()) {
             String leadEmail = leadToEmailMap.get(leadId);
 			if (emailToContactMap.containsKey(leadEmail)) {
+				Contact matchingContact = emailToContactMap.get(leadEmail);
+				if (matchingContact.AccountId != null) {
 				Database.LeadConvert lc = new Database.LeadConvert();
 				lc.setLeadId(leadId);
-				lc.setContactId(emailToContactMap.get(leadEmail).Id); // Use existing Contact Id
-				lc.setAccountId(emailToContactMap.get(leadEmail).AccountId); // Use existing Account Id
+				lc.setContactId(matchingContact.Id); // Use existing Contact Id
+				lc.setAccountId(matchingContact.AccountId); // Use existing Account Id
 				lc.setDoNotCreateOpportunity(true); // Assuming we don't want to create an opportunity
 				lc.setConvertedStatus(convertStatus.MasterLabel); // Set the converted status
 				leadConverts.add(lc);
 			}
 		}
+	}
 
 		if (!leadConverts.isEmpty()) {
 			List<Database.LeadConvertResult> lcrs = Database.convertLead(leadConverts);

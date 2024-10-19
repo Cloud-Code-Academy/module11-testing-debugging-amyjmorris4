@@ -15,21 +15,17 @@
  * - It's essential to test the trigger thoroughly after making any changes to ensure its correct functionality.
  * - Debugging skills will be tested, so students should look out for discrepancies between the expected and actual behavior.
  */
-trigger LeadTrigger on Lead(before insert) {
-	switch on Trigger.operationType {
-		when BEFORE_INSERT {
+trigger LeadTrigger on Lead(before insert, before update, after insert, after update) {
+	if (trigger.isBefore) {
+		if (Trigger.isInsert || Trigger.isUpdate){
 			LeadTriggerHandler.handleTitleNormalization(Trigger.new);
 			LeadTriggerHandler.handleAutoLeadScoring(Trigger.new);
 		}
-		when BEFORE_UPDATE {
-			LeadTriggerHandler.handleTitleNormalization(Trigger.new);
-			LeadTriggerHandler.handleAutoLeadScoring(Trigger.new);
-		}
-		when AFTER_INSERT {
-			LeadTriggerHandler.handleLeadAutoConvert(Trigger.new);
-		}
-		when AFTER_UPDATE {
+	}
+	if (Trigger.isAfter) {
+		if (Trigger.isInsert || Trigger.isUpdate){
 			LeadTriggerHandler.handleLeadAutoConvert(Trigger.new);
 		}
 	}
 }
+//switch statements do not work directly on Trigger.operationType. Changed to the if/else structure to handle trigger events
